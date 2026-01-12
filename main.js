@@ -15,6 +15,11 @@ const closeButton = document.querySelector('.close-button');
 const modalElementName = document.getElementById('modal-element-name');
 const isotopeList = document.getElementById('isotope-list');
 
+// Production Channels Elements
+const detailsPanel = document.getElementById('isotope-details-panel');
+const selectedIsotopeName = document.getElementById('selected-isotope-name');
+const productionList = document.getElementById('production-list');
+
 // Find max abundance for scaling (logarithmic scale is usually better for this data)
 // Oxygen is ~461,000, while some are < 0.001. Log scale is essential.
 const maxAbundance = Math.max(...elements.map(e => e.abundance));
@@ -131,6 +136,7 @@ function hideInfo() {
 function openModal(element) {
     modalElementName.textContent = `${element.name} Isotopes`;
     isotopeList.innerHTML = ''; // Clear previous
+    detailsPanel.classList.add('hidden'); // Hide details panel
 
     const elementIsotopes = isotopeData.find(d => d.atomic_number === element.number);
 
@@ -273,8 +279,95 @@ function renderIsotopes(isotopes) {
             ` : ''}
         `;
 
+        // Click event for production channels
+        card.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.isotope-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            showProductionChannels(z, n, iso.nuclide);
+        });
+
         isotopeList.appendChild(card);
     });
+}
+
+function showProductionChannels(z, n, nuclideName) {
+    selectedIsotopeName.textContent = nuclideName;
+    productionList.innerHTML = '';
+
+    const methods = getProductionMethods(z, n);
+
+    if (methods.length > 0) {
+        methods.forEach(m => {
+            const li = document.createElement('li');
+            li.textContent = m;
+            productionList.appendChild(li);
+        });
+    } else {
+        const li = document.createElement('li');
+        li.textContent = "No common production channels found in database.";
+        productionList.appendChild(li);
+    }
+
+    detailsPanel.classList.remove('hidden');
+    detailsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function getProductionMethods(z, n) {
+    const methods = [];
+    const targetA = z + n;
+
+    // 1. Reverse Decay Logic
+    nuclideData.forEach(parent => {
+        const parentA = parent.z + parent.n;
+        const mode = parent.mode.trim();
+
+        // Beta- (B-): (Z, A) -> (Z+1, A) + e- + v. So Daughter is (Z+1, A).
+        // If target is (Z, A), Parent was (Z-1, A).
+        if (mode.includes('B-') && parent.z === z - 1 && parentA === targetA) {
+            methods.push(`Beta- Decay of ${parent.name}-${parentA}`);
+        }
+
+        // Beta+ / EC: (Z, A) -> (Z-1, A) + e+ + v. So Daughter is (Z-1, A).
+        // If target is (Z, A), Parent was (Z+1, A).
+        if ((mode.includes('B+') || mode.includes('EC')) && parent.z === z + 1 && parentA === targetA) {
+            methods.push(`Beta+ / EC Decay of ${parent.name}-${parentA}`);
+        }
+
+        // Alpha (A): (Z, A) -> (Z-2, A-4) + He-4. So Daughter is (Z-2, A-4).
+        // If target is (Z, A), Parent was (Z+2, A+4).
+        if (mode.includes('A') && parent.z === z + 2 && parentA === targetA + 4) {
+            methods.push(`Alpha Decay of ${parent.name}-${parentA}`);
+        }
+
+        // Neutron Emission (N): (Z, A) -> (Z, A-1) + n. So Daughter is (Z, A-1).
+        // If target is (Z, A), Parent was (Z, A+1).
+        if (mode.includes('N') && parent.z === z && parentA === targetA + 1) {
+            methods.push(`Neutron Emission from ${parent.name}-${parentA}`);
+        }
+
+        // Proton Emission (P): (Z, A) -> (Z-1, A-1) + p. So Daughter is (Z-1, A-1).
+        // If target is (Z, A), Parent was (Z+1, A+1).
+        if (mode.includes('P') && parent.z === z + 1 && parentA === targetA + 1) {
+            methods.push(`Proton Emission from ${parent.name}-${parentA}`);
+        }
+    });
+
+    // 2. Induced Reactions (Common ones)
+    // Neutron Capture (n, gamma): (Z, A-1) + n -> (Z, A)
+    const neutronParent = nuclideData.find(d => d.z === z && (d.z + d.n) === targetA - 1);
+    if (neutronParent) {
+        methods.push(`Neutron Capture (n,γ) on ${neutronParent.name}-${targetA - 1}`);
+    }
+
+    // Alpha Capture (alpha, n) or (alpha, gamma) - less common but possible
+    // (Z-2, A-4) + alpha -> (Z, A)
+    const alphaParent = nuclideData.find(d => d.z === z - 2 && (d.z + d.n) === targetA - 4);
+    if (alphaParent) {
+        methods.push(`Alpha-induced reaction on ${alphaParent.name}-${targetA - 4}`);
+    }
+
+    return [...new Set(methods)]; // Remove duplicates
 }
 
 renderTable();

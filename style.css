@@ -306,3 +306,55 @@ p {
     justify-content: space-between;
     margin-bottom: 2px;
 }
+
+/* Isotope Details Panel */
+.details-panel {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #334155;
+    animation: fadeIn 0.3s ease;
+}
+
+.details-panel h3 {
+    color: #fff;
+    margin-bottom: 1rem;
+    font-size: 1.4rem;
+}
+
+#production-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 0.8rem;
+}
+
+#production-list li {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    padding: 0.8rem;
+    border-radius: 6px;
+    color: #cbd5e1;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+}
+
+#production-list li::before {
+    content: "→";
+    margin-right: 0.8rem;
+    color: #22c55e;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.isotope-card.selected {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+    transform: scale(1.02);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
