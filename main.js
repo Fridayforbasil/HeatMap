@@ -1,4 +1,5 @@
 import { elements } from './data.js';
+import { isotopeData } from './isotopes.js';
 
 const tableContainer = document.getElementById('periodic-table');
 const infoPanel = document.getElementById('info-panel');
@@ -6,6 +7,12 @@ const elName = document.getElementById('element-name');
 const elSymbol = document.getElementById('element-symbol');
 const elNumber = document.getElementById('element-number');
 const elAbundance = document.getElementById('element-abundance');
+
+// Modal Elements
+const modal = document.getElementById('isotope-modal');
+const closeButton = document.querySelector('.close-button');
+const modalElementName = document.getElementById('modal-element-name');
+const isotopeList = document.getElementById('isotope-list');
 
 // Find max abundance for scaling (logarithmic scale is usually better for this data)
 // Oxygen is ~461,000, while some are < 0.001. Log scale is essential.
@@ -99,6 +106,9 @@ function renderTable() {
         elDiv.addEventListener('mouseenter', () => showInfo(element));
         elDiv.addEventListener('mouseleave', () => hideInfo());
 
+        // Click event for modal
+        elDiv.addEventListener('click', () => openModal(element));
+
         tableContainer.appendChild(elDiv);
     });
 }
@@ -114,6 +124,84 @@ function showInfo(element) {
 
 function hideInfo() {
     infoPanel.classList.add('hidden');
+}
+
+// Modal Logic
+function openModal(element) {
+    modalElementName.textContent = `${element.name} Isotopes`;
+    isotopeList.innerHTML = ''; // Clear previous
+
+    const elementIsotopes = isotopeData.find(d => d.atomic_number === element.number);
+
+    if (elementIsotopes && elementIsotopes.isotopes) {
+        renderIsotopes(elementIsotopes.isotopes);
+    } else {
+        isotopeList.innerHTML = '<p>No isotope data available.</p>';
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeModal() {
+    modal.classList.add('hidden');
+}
+
+closeButton.addEventListener('click', closeModal);
+window.addEventListener('click', (event) => {
+    if (event.target === modal) {
+        closeModal();
+    }
+});
+
+function renderIsotopes(isotopes) {
+    // Filter out isotopes with 0 abundance if desired, or keep them to show synthetic ones.
+    // Let's keep them but style them differently.
+
+    // Find max abundance for this element to normalize heatmap
+    const maxIsoAbundance = Math.max(...isotopes.map(i => i.abundance));
+
+    isotopes.forEach(iso => {
+        const card = document.createElement('div');
+        card.classList.add('isotope-card');
+
+        // Heatmap color for isotope
+        let bgStyle = 'rgba(255, 255, 255, 0.05)';
+        let textColor = '#fff';
+
+        if (iso.abundance > 0) {
+            // Log scale for isotopes too? Usually one or two dominate.
+            // Linear might be better here to show dominance, or log to show trace.
+            // Let's stick to the main table's logic: Logarithmic if range is huge.
+            // But for isotopes, usually it's 99% vs 1% vs 0.001%.
+            // Let's use a simple linear opacity or lightness for now, or reuse the getHeatmapColor logic but adapted.
+
+            // Simple approach: Opacity of a base color based on abundance
+            // Abundance is percentage (0-100) or fraction (0-1)? 
+            // Checking data... it seems to be fraction or percentage. 
+            // In the JSON snippet: H-1 is 0.999885 (fraction).
+
+            const percentage = iso.abundance * 100;
+            const alpha = 0.2 + (0.8 * (iso.abundance)); // 0.2 min opacity
+
+            // Color: Cyan for high abundance, Dark for low
+            bgStyle = `rgba(6, 182, 212, ${alpha})`;
+
+            if (iso.abundance > 0.5) {
+                textColor = '#000'; // Dark text on bright background
+            }
+        }
+
+        card.style.backgroundColor = bgStyle;
+        card.style.color = textColor;
+
+        card.innerHTML = `
+            <div class="isotope-nuclide">${iso.nuclide}</div>
+            <div class="isotope-mass">${iso.mass.toFixed(4)} u</div>
+            <div class="isotope-abundance">${(iso.abundance * 100).toFixed(4)}%</div>
+        `;
+
+        isotopeList.appendChild(card);
+    });
 }
 
 renderTable();
