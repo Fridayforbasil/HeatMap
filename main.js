@@ -1,5 +1,6 @@
 import { elements } from './data.js';
 import { isotopeData } from './isotopes.js';
+import { nuclideData } from './nuclides.js';
 
 const tableContainer = document.getElementById('periodic-table');
 const infoPanel = document.getElementById('info-panel');
@@ -164,22 +165,77 @@ function renderIsotopes(isotopes) {
         const card = document.createElement('div');
         card.classList.add('isotope-card');
 
+        // Match with nuclide data
+        // iso.nuclide is like "H-1", "He-4"
+        // nuclideData has "z", "n", "name". Mass number A = z + n.
+        // We need to parse iso.nuclide or use atomic number + mass number.
+        // iso has mass_number.
+        // We need to find the element's atomic number first to match 'z'.
+        // We can pass the parent element's number to this function or look it up.
+        // But wait, iso object in isotopes.js doesn't have atomic number directly inside the isotope object, 
+        // it's in the parent. But we are iterating isotopes array.
+        // We can parse the nuclide string "Element-Mass".
+
+        const parts = iso.nuclide.split('-');
+        const symbol = parts[0];
+        const massNumber = parseInt(parts[1]);
+
+        // Find matching nuclide in nuclideData
+        // nuclideData uses 'name' for symbol (e.g. "H", "He")
+        // 'z' is atomic number. 'n' is neutron number.
+        // massNumber = z + n => n = massNumber - z.
+        // We need 'z'. We can find it from 'elements' array or look up by symbol.
+        const elementInfo = elements.find(e => e.symbol === symbol);
+        const z = elementInfo ? elementInfo.number : 0;
+        const n = massNumber - z;
+
+        const nuclide = nuclideData.find(d => d.z === z && d.n === n);
+
+        // Determine Stability
+        let isStable = false;
+        let halfLifeText = 'Unknown';
+        let lambdaText = '-';
+
+        if (nuclide) {
+            // Check stability
+            // If life is empty string or "stable" (though JSON has numbers or empty)
+            // Looking at JSON sample:
+            // { "z":1, "n":0, "name":"H", "life":" " , "mode":"S" } -> S likely means Stable?
+            // { "z":1, "n":2, "name":"H", "life":"388781328.00697345" , "mode":"B-" } -> Unstable
+
+            if (nuclide.mode.trim() === 'S' || (nuclide.life.trim() === '' && nuclide.mode.trim() === '')) {
+                isStable = true;
+                halfLifeText = 'Stable';
+            } else {
+                isStable = false;
+                const lifeSeconds = parseFloat(nuclide.life);
+                if (!isNaN(lifeSeconds)) {
+                    // Format Half Life
+                    if (lifeSeconds > 3.154e7) {
+                        halfLifeText = `${(lifeSeconds / 3.154e7).toExponential(2)} y`;
+                    } else if (lifeSeconds > 86400) {
+                        halfLifeText = `${(lifeSeconds / 86400).toFixed(2)} d`;
+                    } else if (lifeSeconds > 3600) {
+                        halfLifeText = `${(lifeSeconds / 3600).toFixed(2)} h`;
+                    } else if (lifeSeconds > 60) {
+                        halfLifeText = `${(lifeSeconds / 60).toFixed(2)} m`;
+                    } else {
+                        halfLifeText = `${lifeSeconds.toExponential(2)} s`;
+                    }
+
+                    // Calculate Lambda
+                    // lambda = ln(2) / half_life
+                    const lambda = Math.LN2 / lifeSeconds;
+                    lambdaText = `${lambda.toExponential(2)} s⁻¹`;
+                }
+            }
+        }
+
         // Heatmap color for isotope
         let bgStyle = 'rgba(255, 255, 255, 0.05)';
         let textColor = '#fff';
 
         if (iso.abundance > 0) {
-            // Log scale for isotopes too? Usually one or two dominate.
-            // Linear might be better here to show dominance, or log to show trace.
-            // Let's stick to the main table's logic: Logarithmic if range is huge.
-            // But for isotopes, usually it's 99% vs 1% vs 0.001%.
-            // Let's use a simple linear opacity or lightness for now, or reuse the getHeatmapColor logic but adapted.
-
-            // Simple approach: Opacity of a base color based on abundance
-            // Abundance is percentage (0-100) or fraction (0-1)? 
-            // Checking data... it seems to be fraction or percentage. 
-            // In the JSON snippet: H-1 is 0.999885 (fraction).
-
             const percentage = iso.abundance * 100;
             const alpha = 0.2 + (0.8 * (iso.abundance)); // 0.2 min opacity
 
@@ -194,10 +250,27 @@ function renderIsotopes(isotopes) {
         card.style.backgroundColor = bgStyle;
         card.style.color = textColor;
 
+        const stabilityClass = isStable ? 'stable' : 'unstable';
+
         card.innerHTML = `
-            <div class="isotope-nuclide">${iso.nuclide}</div>
+            <div class="isotope-nuclide">
+                <span class="stability-indicator ${stabilityClass}"></span>
+                ${iso.nuclide}
+            </div>
             <div class="isotope-mass">${iso.mass.toFixed(4)} u</div>
             <div class="isotope-abundance">${(iso.abundance * 100).toFixed(4)}%</div>
+            ${!isStable ? `
+            <div class="isotope-details">
+                <div class="detail-row">
+                    <span>T<sub>1/2</sub>:</span>
+                    <span>${halfLifeText}</span>
+                </div>
+                <div class="detail-row">
+                    <span>λ:</span>
+                    <span>${lambdaText}</span>
+                </div>
+            </div>
+            ` : ''}
         `;
 
         isotopeList.appendChild(card);
